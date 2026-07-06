@@ -67,6 +67,21 @@ proc setKeepAlive*(socket: Socket; enabled = true): bool =
     return false
   setTcpKeepAlive(socket.handle, enabled)
 
+proc setReadTimeoutMillis*(socket: Socket; millis: int): bool =
+  if not socket.isValid:
+    return false
+  setTcpReadTimeoutMillis(socket.handle, millis)
+
+proc setWriteTimeoutMillis*(socket: Socket; millis: int): bool =
+  if not socket.isValid:
+    return false
+  setTcpWriteTimeoutMillis(socket.handle, millis)
+
+proc setTimeoutMillis*(socket: Socket; millis: int): bool =
+  if not socket.isValid:
+    return false
+  setTcpTimeoutMillis(socket.handle, millis)
+
 proc shutdownRead*(socket: Socket): bool =
   if not socket.isValid:
     return false

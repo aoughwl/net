@@ -29,6 +29,7 @@ shutdownNet()
 | `listen`, `accept`, `connect`, `connectLocalhost` | socket operations |
 | `invalidEndpoint`, `localEndpoint`, `peerEndpoint` | endpoint introspection |
 | `setNoDelay`, `setKeepAlive` | common TCP socket options |
+| `setReadTimeoutMillis`, `setWriteTimeoutMillis`, `setTimeoutMillis` | bound blocking socket I/O |
 | `shutdownRead`, `shutdownWrite`, `shutdownBoth` | half-close or fully shut down socket traffic |
 | `recvInto`, `sendFrom`, `sendAllFrom` | pointer-buffer I/O |
 | `recv`, `send`, `sendAll` | string convenience I/O |
