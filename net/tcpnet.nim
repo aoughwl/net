@@ -22,6 +22,9 @@ proc shutdownNet*() =
 proc listen*(port: int; backlog = 128): Socket =
   Socket(handle: listenTcp(port, backlog))
 
+proc listen*(ip: Ipv4Address; port: int; backlog = 128): Socket =
+  Socket(handle: listenTcp4(ipv4Value(ip), port, backlog))
+
 proc connect*(hostOrderAddr: uint32; port: int): Socket =
   Socket(handle: connectTcp4(hostOrderAddr, port))
 

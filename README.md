@@ -8,7 +8,7 @@ Small blocking network API for Nimony.
 import net
 
 initNet()
-let server = listen(8080)
+let server = listen(localhostIpv4(), 8080)
 let client = accept(server)
 let request = recv(client, 8192)
 discard send(client, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
