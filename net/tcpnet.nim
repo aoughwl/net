@@ -7,11 +7,24 @@ type
   Socket* = object
     handle*: TcpHandle
 
+  Endpoint* = object
+    address*: Ipv4Address
+    port*: int
+
 proc invalidSocket*(): Socket =
   Socket(handle: InvalidTcpHandle)
 
 proc isValid*(s: Socket): bool =
   isValidTcp(s.handle)
+
+proc invalidEndpoint*(): Endpoint =
+  Endpoint(address: anyIpv4(), port: -1)
+
+proc isValid*(endpoint: Endpoint): bool =
+  endpoint.port >= 0
+
+proc endpointFromTcp(endpoint: TcpEndpoint): Endpoint =
+  Endpoint(address: Ipv4Address(value: endpoint.address), port: endpoint.port)
 
 proc initNet*() =
   initTcp()
@@ -33,6 +46,16 @@ proc connect*(ip: Ipv4Address; port: int): Socket =
 
 proc connectLocalhost*(port: int): Socket =
   Socket(handle: connectLocalhostTcp(port))
+
+proc localEndpoint*(socket: Socket): Endpoint =
+  if not socket.isValid:
+    return invalidEndpoint()
+  endpointFromTcp(localTcpEndpoint(socket.handle))
+
+proc peerEndpoint*(socket: Socket): Endpoint =
+  if not socket.isValid:
+    return invalidEndpoint()
+  endpointFromTcp(peerTcpEndpoint(socket.handle))
 
 proc setNoDelay*(socket: Socket; enabled = true): bool =
   if not socket.isValid:

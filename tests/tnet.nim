@@ -12,6 +12,12 @@ discard setKeepAlive(s)
 discard shutdownRead(s)
 discard shutdownWrite(s)
 discard shutdownBoth(s)
+let endpoint = invalidEndpoint()
+discard endpoint.isValid()
+discard endpoint.address
+discard endpoint.port
+discard localEndpoint(s)
+discard peerEndpoint(s)
 s.closeAndInvalidate()
 
 var loopback = anyIpv4()
