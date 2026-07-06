@@ -34,6 +34,16 @@ proc connect*(ip: Ipv4Address; port: int): Socket =
 proc connectLocalhost*(port: int): Socket =
   Socket(handle: connectLocalhostTcp(port))
 
+proc setNoDelay*(socket: Socket; enabled = true): bool =
+  if not socket.isValid:
+    return false
+  setTcpNoDelay(socket.handle, enabled)
+
+proc setKeepAlive*(socket: Socket; enabled = true): bool =
+  if not socket.isValid:
+    return false
+  setTcpKeepAlive(socket.handle, enabled)
+
 proc accept*(server: Socket): Socket =
   if not server.isValid:
     return invalidSocket()

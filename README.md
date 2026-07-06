@@ -26,6 +26,7 @@ shutdownNet()
 | `invalidSocket`, `isValid` | socket state helpers |
 | `initNet`, `shutdownNet` | platform lifecycle |
 | `listen`, `accept`, `connect`, `connectLocalhost` | socket operations |
+| `setNoDelay`, `setKeepAlive` | common TCP socket options |
 | `recvInto`, `sendFrom`, `sendAllFrom` | pointer-buffer I/O |
 | `recv`, `send`, `sendAll` | string convenience I/O |
 | `close`, `closeAndInvalidate` | close a socket |

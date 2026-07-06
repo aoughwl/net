@@ -7,6 +7,8 @@ discard s.isValid()
 discard recv(s, 16)
 discard send(s, "")
 discard sendAll(s, "")
+discard setNoDelay(s)
+discard setKeepAlive(s)
 s.closeAndInvalidate()
 
 var loopback = anyIpv4()
