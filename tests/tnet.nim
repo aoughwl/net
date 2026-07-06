@@ -8,3 +8,7 @@ discard recv(s, 16)
 discard send(s, "")
 discard sendAll(s, "")
 s.closeAndInvalidate()
+let c4: proc(hostOrderAddr: uint32; port: int): Socket = connect
+let cl: proc(port: int): Socket = connectLocalhost
+discard c4
+discard cl

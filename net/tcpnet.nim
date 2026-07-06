@@ -21,6 +21,12 @@ proc shutdownNet*() =
 proc listen*(port: int; backlog = 128): Socket =
   Socket(handle: listenTcp(port, backlog))
 
+proc connect*(hostOrderAddr: uint32; port: int): Socket =
+  Socket(handle: connectTcp4(hostOrderAddr, port))
+
+proc connectLocalhost*(port: int): Socket =
+  Socket(handle: connectLocalhostTcp(port))
+
 proc accept*(server: Socket): Socket =
   if not server.isValid:
     return invalidSocket()
