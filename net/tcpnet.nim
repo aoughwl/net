@@ -10,7 +10,7 @@ proc invalidSocket*(): Socket =
   Socket(handle: InvalidTcpHandle)
 
 proc isValid*(s: Socket): bool =
-  s.handle != InvalidTcpHandle
+  isValidTcp(s.handle)
 
 proc initNet*() =
   initTcp()
@@ -36,9 +36,19 @@ proc sendFrom*(socket: Socket; buf: pointer; len: int): int =
     return -1
   writeTcp(socket.handle, buf, len)
 
+proc sendAllFrom*(socket: Socket; buf: pointer; len: int): int =
+  if not socket.isValid:
+    return -1
+  writeAllTcp(socket.handle, buf, len)
+
 proc close*(socket: Socket) =
   if socket.isValid:
     closeTcp(socket.handle)
+
+proc closeAndInvalidate*(socket: var Socket) =
+  if socket.isValid:
+    closeTcp(socket.handle)
+  socket.handle = InvalidTcpHandle
 
 proc recv*(socket: Socket; maxBytes: int): string =
   var buf = default(array[8192, char])
@@ -68,3 +78,6 @@ proc send*(socket: Socket; data: string): int =
       return total
     total = total + written
   return total
+
+proc sendAll*(socket: Socket; data: string): bool =
+  send(socket, data) == data.len
