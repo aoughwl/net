@@ -1,6 +1,6 @@
 # net
 
-Small blocking network API for Nimony / Nim.
+Small blocking network API for Nimony.
 
 `net` provides a stdlib-style wrapper over the lower-level `tcp` package:
 

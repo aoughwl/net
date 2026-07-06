@@ -1,6 +1,6 @@
 ## tnet.aowl — compile-time API smoke for net.
 
-import net
+import ../net
 
 var s = invalidSocket()
 discard s.isValid()
@@ -10,5 +10,5 @@ discard sendAll(s, "")
 s.closeAndInvalidate()
 let c4: proc(hostOrderAddr: uint32; port: int): Socket = connect
 let cl: proc(port: int): Socket = connectLocalhost
-discard c4
-discard cl
+discard c4 == nil
+discard cl == nil
