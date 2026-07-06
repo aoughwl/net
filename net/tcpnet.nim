@@ -1,6 +1,7 @@
 ## net/tcpnet.aowl — stdlib-style blocking TCP wrapper over `tcp`.
 
 import tcp
+import address
 
 type
   Socket* = object
@@ -23,6 +24,9 @@ proc listen*(port: int; backlog = 128): Socket =
 
 proc connect*(hostOrderAddr: uint32; port: int): Socket =
   Socket(handle: connectTcp4(hostOrderAddr, port))
+
+proc connect*(ip: Ipv4Address; port: int): Socket =
+  Socket(handle: connectTcp4(ipv4Value(ip), port))
 
 proc connectLocalhost*(port: int): Socket =
   Socket(handle: connectLocalhostTcp(port))

@@ -22,9 +22,10 @@ shutdownNet()
 | symbol | role |
 |--------|------|
 | `Socket` | wrapper around a native TCP handle |
+| `Ipv4Address`, `ipv4`, `parseIpv4`, `localhostIpv4` | IPv4 address helpers |
 | `invalidSocket`, `isValid` | socket state helpers |
 | `initNet`, `shutdownNet` | platform lifecycle |
-| `listen`, `accept` | server socket operations |
+| `listen`, `accept`, `connect`, `connectLocalhost` | socket operations |
 | `recvInto`, `sendFrom`, `sendAllFrom` | pointer-buffer I/O |
 | `recv`, `send`, `sendAll` | string convenience I/O |
 | `close`, `closeAndInvalidate` | close a socket |

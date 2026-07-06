@@ -8,7 +8,12 @@ discard recv(s, 16)
 discard send(s, "")
 discard sendAll(s, "")
 s.closeAndInvalidate()
-let c4: proc(hostOrderAddr: uint32; port: int): Socket = connect
-let cl: proc(port: int): Socket = connectLocalhost
-discard c4 == nil
-discard cl == nil
+
+var loopback = anyIpv4()
+discard parseIpv4("127.0.0.1", loopback)
+discard ipv4Value(loopback) == ipv4Value(localhostIpv4())
+
+proc typecheckConnectApi() =
+  discard connect(ipv4(127, 0, 0, 1), 1)
+  discard connect(0x7f000001'u32, 1)
+  discard connectLocalhost(1)
