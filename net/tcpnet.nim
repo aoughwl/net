@@ -44,6 +44,21 @@ proc setKeepAlive*(socket: Socket; enabled = true): bool =
     return false
   setTcpKeepAlive(socket.handle, enabled)
 
+proc shutdownRead*(socket: Socket): bool =
+  if not socket.isValid:
+    return false
+  shutdownTcpRead(socket.handle)
+
+proc shutdownWrite*(socket: Socket): bool =
+  if not socket.isValid:
+    return false
+  shutdownTcpWrite(socket.handle)
+
+proc shutdownBoth*(socket: Socket): bool =
+  if not socket.isValid:
+    return false
+  shutdownTcpBoth(socket.handle)
+
 proc accept*(server: Socket): Socket =
   if not server.isValid:
     return invalidSocket()

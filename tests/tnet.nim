@@ -1,6 +1,6 @@
 ## tnet.aowl — compile-time API smoke for net.
 
-import ../net
+import net
 
 var s = invalidSocket()
 discard s.isValid()
@@ -9,6 +9,9 @@ discard send(s, "")
 discard sendAll(s, "")
 discard setNoDelay(s)
 discard setKeepAlive(s)
+discard shutdownRead(s)
+discard shutdownWrite(s)
+discard shutdownBoth(s)
 s.closeAndInvalidate()
 
 var loopback = anyIpv4()

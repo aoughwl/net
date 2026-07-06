@@ -27,6 +27,7 @@ shutdownNet()
 | `initNet`, `shutdownNet` | platform lifecycle |
 | `listen`, `accept`, `connect`, `connectLocalhost` | socket operations |
 | `setNoDelay`, `setKeepAlive` | common TCP socket options |
+| `shutdownRead`, `shutdownWrite`, `shutdownBoth` | half-close or fully shut down socket traffic |
 | `recvInto`, `sendFrom`, `sendAllFrom` | pointer-buffer I/O |
 | `recv`, `send`, `sendAll` | string convenience I/O |
 | `close`, `closeAndInvalidate` | close a socket |
