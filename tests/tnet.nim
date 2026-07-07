@@ -3,6 +3,7 @@
 import net
 
 var s = invalidSocket()
+discard lastNetErrorCode()
 discard s.isValid()
 discard recv(s, 16)
 discard send(s, "")

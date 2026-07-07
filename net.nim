@@ -1,4 +1,4 @@
-## net — small blocking network API for Nimony.
+## net — small blocking network API.
 
 import net/address
 import net/tcpnet

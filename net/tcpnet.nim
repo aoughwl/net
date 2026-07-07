@@ -32,6 +32,10 @@ proc initNet*() =
 proc shutdownNet*() =
   shutdownTcp()
 
+proc lastNetErrorCode*(): int =
+  ## Return the last platform socket error code for the current thread.
+  lastTcpErrorCode()
+
 proc listen*(port: int; backlog = 128): Socket =
   Socket(handle: listenTcp(port, backlog))
 

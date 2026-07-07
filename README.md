@@ -1,6 +1,6 @@
 # net
 
-Small blocking network API for Nimony.
+Small blocking network API.
 
 `net` provides a stdlib-style wrapper over the lower-level `tcp` package:
 
@@ -26,6 +26,7 @@ shutdownNet()
 | `Ipv4Address`, `ipv4`, `parseIpv4`, `localhostIpv4` | IPv4 address helpers |
 | `invalidSocket`, `isValid` | socket state helpers |
 | `initNet`, `shutdownNet` | platform lifecycle |
+| `lastNetErrorCode` | last platform socket error code for the current thread |
 | `listen`, `accept`, `connect`, `connectLocalhost` | socket operations |
 | `invalidEndpoint`, `localEndpoint`, `peerEndpoint` | endpoint introspection |
 | `setNoDelay`, `setKeepAlive` | common TCP socket options |
