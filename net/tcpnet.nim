@@ -1,4 +1,4 @@
-## net/tcpnet.aowl — stdlib-style blocking TCP wrapper over `tcp`.
+## net/tcpnet.nim — stdlib-style blocking TCP wrapper over `tcp`.
 
 import tcp
 import address
@@ -10,6 +10,17 @@ type
   Endpoint* = object
     address*: Ipv4Address
     port*: int
+
+  SocketPollRequest* = object
+    read*: bool
+    write*: bool
+
+  SocketPollResult* = object
+    read*: bool
+    write*: bool
+    error*: bool
+    hangup*: bool
+    invalid*: bool
 
 proc invalidSocket*(): Socket =
   Socket(handle: InvalidTcpHandle)
@@ -35,6 +46,24 @@ proc shutdownNet*() =
 proc lastNetErrorCode*(): int =
   ## Return the last platform socket error code for the current thread.
   lastTcpErrorCode()
+
+proc lastNetErrorKind*(): TcpErrorKind =
+  lastTcpErrorKind()
+
+proc classifyNetErrorCode*(code: int): TcpErrorKind =
+  classifyTcpErrorCode(code)
+
+proc netErrorWouldRetry*(code: int): bool =
+  tcpErrorWouldRetry(code)
+
+proc netErrorTimedOut*(code: int): bool =
+  tcpErrorTimedOut(code)
+
+proc netErrorInterrupted*(code: int): bool =
+  tcpErrorInterrupted(code)
+
+proc netErrorDisconnected*(code: int): bool =
+  tcpErrorDisconnected(code)
 
 proc listen*(port: int; backlog = 128): Socket =
   Socket(handle: listenTcp(port, backlog))
@@ -98,6 +127,33 @@ proc setTimeoutMillis*(socket: Socket; millis: int): bool =
   if not socket.isValid:
     return false
   setTcpTimeoutMillis(socket.handle, millis)
+
+proc setBlocking*(socket: Socket; blocking: bool): bool =
+  if not socket.isValid:
+    return false
+  setTcpBlocking(socket.handle, blocking)
+
+proc setNonBlocking*(socket: Socket): bool =
+  if not socket.isValid:
+    return false
+  setTcpNonBlocking(socket.handle)
+
+proc poll*(socket: Socket; request: SocketPollRequest; timeoutMillis: int;
+           ready: var SocketPollResult): int =
+  if not socket.isValid:
+    ready = SocketPollResult(read: false, write: false, error: false, hangup: false, invalid: true)
+    return -1
+  var tcpRequest = TcpPollRequest(read: request.read, write: request.write)
+  var tcpReady = default(TcpPollResult)
+  let n = pollTcp(socket.handle, tcpRequest, timeoutMillis, tcpReady)
+  ready = SocketPollResult(
+    read: tcpReady.read,
+    write: tcpReady.write,
+    error: tcpReady.error,
+    hangup: tcpReady.hangup,
+    invalid: tcpReady.invalid
+  )
+  n
 
 proc shutdownRead*(socket: Socket): bool =
   if not socket.isValid:

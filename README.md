@@ -27,11 +27,15 @@ shutdownNet()
 | `invalidSocket`, `isValid` | socket state helpers |
 | `initNet`, `shutdownNet` | platform lifecycle |
 | `lastNetErrorCode` | last platform socket error code for the current thread |
+| `lastNetErrorKind`, `classifyNetErrorCode` | portable socket error classification |
+| `netErrorWouldRetry`, `netErrorTimedOut`, `netErrorInterrupted`, `netErrorDisconnected` | common socket error predicates |
 | `listen`, `accept`, `connect`, `connectLocalhost` | socket operations |
 | `resolveIpv4`, `connectHost` | hostname resolution and resolved TCP connect |
 | `invalidEndpoint`, `localEndpoint`, `peerEndpoint` | endpoint introspection |
 | `setNoDelay`, `setKeepAlive` | common TCP socket options |
 | `setReadTimeoutMillis`, `setWriteTimeoutMillis`, `setTimeoutMillis` | bound blocking socket I/O |
+| `setBlocking`, `setNonBlocking` | switch socket blocking mode |
+| `SocketPollRequest`, `SocketPollResult`, `poll` | wait for socket readiness |
 | `shutdownRead`, `shutdownWrite`, `shutdownBoth` | half-close or fully shut down socket traffic |
 | `recvInto`, `sendFrom`, `sendAllFrom` | pointer-buffer I/O |
 | `recv`, `send`, `sendAll` | string convenience I/O |

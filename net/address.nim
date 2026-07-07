@@ -1,4 +1,4 @@
-## net/address.aowl — small IPv4 address helpers.
+## net/address.nim — small IPv4 address helpers.
 
 type
   Ipv4Address* = object

@@ -1,9 +1,15 @@
-## tnet.aowl — compile-time API smoke for net.
+## tnet.nim — compile-time API smoke for net.
 
 import net
 
 var s = invalidSocket()
 discard lastNetErrorCode()
+discard lastNetErrorKind()
+discard classifyNetErrorCode(0)
+discard netErrorWouldRetry(0)
+discard netErrorTimedOut(0)
+discard netErrorInterrupted(0)
+discard netErrorDisconnected(0)
 discard s.isValid()
 discard recv(s, 16)
 discard send(s, "")
@@ -13,6 +19,11 @@ discard setKeepAlive(s)
 discard setReadTimeoutMillis(s, 0)
 discard setWriteTimeoutMillis(s, 0)
 discard setTimeoutMillis(s, 0)
+discard setBlocking(s, true)
+discard setNonBlocking(s)
+var pollRequest = SocketPollRequest(read: true, write: false)
+var pollResult = default(SocketPollResult)
+discard poll(s, pollRequest, 0, pollResult)
 discard shutdownRead(s)
 discard shutdownWrite(s)
 discard shutdownBoth(s)
