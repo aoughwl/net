@@ -11,6 +11,11 @@ type
     address*: Ipv4Address
     port*: int
 
+  SocketConnectStatus* = enum
+    socketConnectFailed,
+    socketConnectInProgress,
+    socketConnectConnected
+
   SocketPollRequest* = object
     read*: bool
     write*: bool
@@ -21,6 +26,11 @@ type
     error*: bool
     hangup*: bool
     invalid*: bool
+
+  SocketConnectResult* = object
+    socket*: Socket
+    status*: SocketConnectStatus
+    errorCode*: int
 
 proc invalidSocket*(): Socket =
   Socket(handle: InvalidTcpHandle)
@@ -80,6 +90,27 @@ proc connect*(ip: Ipv4Address; port: int): Socket =
 proc connectLocalhost*(port: int): Socket =
   Socket(handle: connectLocalhostTcp(port))
 
+proc socketConnectResultFromTcp(tcpResult: TcpConnectResult): SocketConnectResult =
+  var status = socketConnectFailed
+  if tcpResult.status == tcpConnectInProgress:
+    status = socketConnectInProgress
+  elif tcpResult.status == tcpConnectConnected:
+    status = socketConnectConnected
+  SocketConnectResult(
+    socket: Socket(handle: tcpResult.handle),
+    status: status,
+    errorCode: tcpResult.errorCode
+  )
+
+proc connectNonBlocking*(hostOrderAddr: uint32; port: int): SocketConnectResult =
+  socketConnectResultFromTcp(connectTcp4NonBlocking(hostOrderAddr, port))
+
+proc connectNonBlocking*(ip: Ipv4Address; port: int): SocketConnectResult =
+  socketConnectResultFromTcp(connectTcp4NonBlocking(ipv4Value(ip), port))
+
+proc connectLocalhostNonBlocking*(port: int): SocketConnectResult =
+  socketConnectResultFromTcp(connectLocalhostTcpNonBlocking(port))
+
 proc resolveIpv4*(host: string; dest: var Ipv4Address): bool =
   var raw = 0'u32
   if not resolveTcp4(host, raw):
@@ -92,6 +123,16 @@ proc connectHost*(host: string; port: int): Socket =
   if not resolveIpv4(host, ip):
     return invalidSocket()
   connect(ip, port)
+
+proc connectHostNonBlocking*(host: string; port: int): SocketConnectResult =
+  var ip = anyIpv4()
+  if not resolveIpv4(host, ip):
+    return SocketConnectResult(
+      socket: invalidSocket(),
+      status: socketConnectFailed,
+      errorCode: lastNetErrorCode()
+    )
+  connectNonBlocking(ip, port)
 
 proc localEndpoint*(socket: Socket): Endpoint =
   if not socket.isValid:
@@ -155,6 +196,38 @@ proc poll*(socket: Socket; request: SocketPollRequest; timeoutMillis: int;
   )
   n
 
+proc waitReadable*(socket: Socket; timeoutMillis: int): bool =
+  if not socket.isValid:
+    return false
+  waitTcpReadable(socket.handle, timeoutMillis)
+
+proc waitWritable*(socket: Socket; timeoutMillis: int): bool =
+  if not socket.isValid:
+    return false
+  waitTcpWritable(socket.handle, timeoutMillis)
+
+proc socketErrorCode*(socket: Socket; errorCode: var int): bool =
+  if not socket.isValid:
+    errorCode = -1
+    return false
+  tcpSocketErrorCode(socket.handle, errorCode)
+
+proc socketErrorCode*(socket: Socket): int =
+  if not socket.isValid:
+    return -1
+  tcpSocketErrorCode(socket.handle)
+
+proc finishConnect*(socket: Socket; errorCode: var int): bool =
+  if not socket.isValid:
+    errorCode = -1
+    return false
+  finishTcpConnect(socket.handle, errorCode)
+
+proc finishConnect*(socket: Socket): bool =
+  if not socket.isValid:
+    return false
+  finishTcpConnect(socket.handle)
+
 proc shutdownRead*(socket: Socket): bool =
   if not socket.isValid:
     return false
@@ -174,6 +247,15 @@ proc accept*(server: Socket): Socket =
   if not server.isValid:
     return invalidSocket()
   Socket(handle: acceptTcp(server.handle))
+
+proc acceptWithPeer*(server: Socket; peer: var Endpoint): Socket =
+  if not server.isValid:
+    peer = invalidEndpoint()
+    return invalidSocket()
+  var tcpPeer = invalidTcpEndpoint()
+  let handle = acceptTcpWithPeer(server.handle, tcpPeer)
+  peer = endpointFromTcp(tcpPeer)
+  Socket(handle: handle)
 
 proc recvInto*(socket: Socket; buf: pointer; len: int): int =
   if not socket.isValid:

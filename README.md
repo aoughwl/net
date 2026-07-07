@@ -1,6 +1,6 @@
 # net
 
-Small blocking network API.
+Small network API.
 
 `net` provides a stdlib-style wrapper over the lower-level `tcp` package:
 
@@ -23,19 +23,23 @@ shutdownNet()
 |--------|------|
 | `Socket` | wrapper around a native TCP handle |
 | `Endpoint` | IPv4 address and port reported by the socket stack |
+| `SocketConnectStatus`, `SocketConnectResult` | nonblocking connect result state |
 | `Ipv4Address`, `ipv4`, `parseIpv4`, `localhostIpv4` | IPv4 address helpers |
 | `invalidSocket`, `isValid` | socket state helpers |
 | `initNet`, `shutdownNet` | platform lifecycle |
 | `lastNetErrorCode` | last platform socket error code for the current thread |
 | `lastNetErrorKind`, `classifyNetErrorCode` | portable socket error classification |
 | `netErrorWouldRetry`, `netErrorTimedOut`, `netErrorInterrupted`, `netErrorDisconnected` | common socket error predicates |
-| `listen`, `accept`, `connect`, `connectLocalhost` | socket operations |
+| `listen`, `accept`, `acceptWithPeer`, `connect`, `connectLocalhost` | socket operations |
+| `connectNonBlocking`, `connectLocalhostNonBlocking` | start a nonblocking TCP connect |
 | `resolveIpv4`, `connectHost` | hostname resolution and resolved TCP connect |
+| `connectHostNonBlocking`, `finishConnect`, `socketErrorCode` | hostname nonblocking connect and completion helpers |
 | `invalidEndpoint`, `localEndpoint`, `peerEndpoint` | endpoint introspection |
 | `setNoDelay`, `setKeepAlive` | common TCP socket options |
 | `setReadTimeoutMillis`, `setWriteTimeoutMillis`, `setTimeoutMillis` | bound blocking socket I/O |
 | `setBlocking`, `setNonBlocking` | switch socket blocking mode |
 | `SocketPollRequest`, `SocketPollResult`, `poll` | wait for socket readiness |
+| `waitReadable`, `waitWritable` | common readiness waits |
 | `shutdownRead`, `shutdownWrite`, `shutdownBoth` | half-close or fully shut down socket traffic |
 | `recvInto`, `sendFrom`, `sendAllFrom` | pointer-buffer I/O |
 | `recv`, `send`, `sendAll` | string convenience I/O |
@@ -43,7 +47,7 @@ shutdownNet()
 
 ## Notes
 
-* Blocking API by design.
+* Blocking operations by default, with explicit nonblocking connect and readiness helpers.
 * Built on the `tcp` package.
 * No framework runtime.
 
