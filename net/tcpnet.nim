@@ -51,6 +51,19 @@ proc connect*(ip: Ipv4Address; port: int): Socket =
 proc connectLocalhost*(port: int): Socket =
   Socket(handle: connectLocalhostTcp(port))
 
+proc resolveIpv4*(host: string; dest: var Ipv4Address): bool =
+  var raw = 0'u32
+  if not resolveTcp4(host, raw):
+    return false
+  dest = Ipv4Address(value: raw)
+  true
+
+proc connectHost*(host: string; port: int): Socket =
+  var ip = anyIpv4()
+  if not resolveIpv4(host, ip):
+    return invalidSocket()
+  connect(ip, port)
+
 proc localEndpoint*(socket: Socket): Endpoint =
   if not socket.isValid:
     return invalidEndpoint()

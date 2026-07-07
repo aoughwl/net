@@ -28,6 +28,7 @@ shutdownNet()
 | `initNet`, `shutdownNet` | platform lifecycle |
 | `lastNetErrorCode` | last platform socket error code for the current thread |
 | `listen`, `accept`, `connect`, `connectLocalhost` | socket operations |
+| `resolveIpv4`, `connectHost` | hostname resolution and resolved TCP connect |
 | `invalidEndpoint`, `localEndpoint`, `peerEndpoint` | endpoint introspection |
 | `setNoDelay`, `setKeepAlive` | common TCP socket options |
 | `setReadTimeoutMillis`, `setWriteTimeoutMillis`, `setTimeoutMillis` | bound blocking socket I/O |

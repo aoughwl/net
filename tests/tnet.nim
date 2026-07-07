@@ -26,6 +26,7 @@ s.closeAndInvalidate()
 
 var loopback = anyIpv4()
 discard parseIpv4("127.0.0.1", loopback)
+discard resolveIpv4("localhost", loopback)
 discard ipv4Value(loopback) == ipv4Value(localhostIpv4())
 
 proc typecheckConnectApi() =
@@ -34,3 +35,4 @@ proc typecheckConnectApi() =
   discard connect(ipv4(127, 0, 0, 1), 1)
   discard connect(0x7f000001'u32, 1)
   discard connectLocalhost(1)
+  discard connectHost("localhost", 1)
