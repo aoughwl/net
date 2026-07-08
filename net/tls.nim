@@ -85,6 +85,8 @@ proc SSL_CTX_check_private_key(ctx: nil pointer): cint {.cdecl, importc: "SSL_CT
 proc SSL_CTX_set_cipher_list(ctx: nil pointer; str: cstring): cint {.cdecl, importc: "SSL_CTX_set_cipher_list", dynlib: sslLib.}
 proc SSL_CTX_set_ciphersuites(ctx: nil pointer; str: cstring): cint {.cdecl, importc: "SSL_CTX_set_ciphersuites", dynlib: sslLib.}
 proc SSL_CTX_set_alpn_protos(ctx: nil pointer; protos: pointer; len: cuint): cint {.cdecl, importc: "SSL_CTX_set_alpn_protos", dynlib: sslLib.}
+proc SSL_CTX_set_alpn_select_cb(ctx: nil pointer; cb: pointer; arg: nil pointer) {.cdecl, importc: "SSL_CTX_set_alpn_select_cb", dynlib: sslLib.}
+proc SSL_select_next_proto(outp: ptr pointer; outl: ptr uint8; server: pointer; slen: cuint; client: pointer; clen: cuint): cint {.cdecl, importc: "SSL_select_next_proto", dynlib: sslLib.}
 proc SSL_CTX_ctrl(ctx: nil pointer; cmd: cint; larg: clong; parg: nil pointer): clong {.cdecl, importc: "SSL_CTX_ctrl", dynlib: sslLib.}
 
 proc SSL_new(ctx: nil pointer): pointer {.cdecl, importc: "SSL_new", dynlib: sslLib.}
@@ -247,24 +249,24 @@ proc setMaxVersion*(ctx: TlsContext; version: int): bool =
   if not ctx.isValid: return false
   SSL_CTX_ctrl(ctx.handle, SSL_CTRL_SET_MAX_PROTO_VERSION, clong(version), nil) == clong(1)
 
-proc setAlpnProtocols*(ctx: TlsContext; protocols: seq[string]): bool =
-  ## Advertise an ALPN protocol list, e.g. `@["h2", "http/1.1"]`. The wire
-  ## format is a sequence of length-prefixed protocol names.
-  if not ctx.isValid: return false
-  if protocols.len == 0: return false
-  var wire = ""
+proc alpnWire(protocols: seq[string]): string =
+  ## Build the ALPN wire format: each protocol as a 1-byte length prefix + name.
+  result = ""
   var i = 0
   while i < protocols.len:
     let p = protocols[i]
-    if p.len == 0 or p.len > 255:
-      inc i
-      continue
-    wire.add char(p.len)
-    var j = 0
-    while j < p.len:
-      wire.add p[j]
-      inc j
+    if p.len > 0 and p.len <= 255:
+      result.add char(p.len)
+      var j = 0
+      while j < p.len:
+        result.add p[j]
+        inc j
     inc i
+
+proc setAlpnProtocols*(ctx: TlsContext; protocols: seq[string]): bool =
+  ## (Client) Advertise an ALPN protocol list, e.g. `@["h2", "http/1.1"]`.
+  if not ctx.isValid: return false
+  var wire = alpnWire(protocols)
   if wire.len == 0: return false
   # SSL_CTX_set_alpn_protos returns 0 on success (note: inverted convention).
   # `toCString` yields a pointer to the string's bytes; the length is passed
@@ -272,11 +274,45 @@ proc setAlpnProtocols*(ctx: TlsContext; protocols: seq[string]): bool =
   # length prefixes are 1..255 and protocol names are ASCII).
   SSL_CTX_set_alpn_protos(ctx.handle, cast[pointer](toCString(wire)), cuint(wire.len)) == cint(0)
 
+# Server-side ALPN selection. The server negotiates by registering a callback
+# that picks, from the client's offered list, the first protocol the server
+# prefers. The server's preference list is a process-global wire string (one
+# server config per process is the expected use).
+var gServerAlpnWire = ""
+
+proc alpnSelectCb(ssl: nil pointer; outp: ptr pointer; outl: ptr uint8;
+                  inp: pointer; inl: cuint; arg: pointer): cint {.cdecl.} =
+  if gServerAlpnWire.len == 0:
+    return cint(3)   # SSL_TLSEXT_ERR_NOACK
+  let rc = SSL_select_next_proto(outp, outl,
+                                 cast[pointer](toCString(gServerAlpnWire)),
+                                 cuint(gServerAlpnWire.len), inp, inl)
+  if rc == cint(1):  # OPENSSL_NPN_NEGOTIATED
+    return cint(0)   # SSL_TLSEXT_ERR_OK
+  cint(3)            # SSL_TLSEXT_ERR_NOACK
+
+proc setAlpnServer*(ctx: TlsContext; protocols: seq[string]): bool =
+  ## (Server) Negotiate ALPN by selecting the server's most-preferred protocol
+  ## from the client's offer, e.g. `@["h2", "http/1.1"]`. Unlike
+  ## `setAlpnProtocols` (which only advertises, for clients), this registers the
+  ## server selection callback so `negotiatedAlpn` reflects the chosen protocol.
+  if not ctx.isValid: return false
+  gServerAlpnWire = alpnWire(protocols)
+  if gServerAlpnWire.len == 0: return false
+  SSL_CTX_set_alpn_select_cb(ctx.handle, alpnSelectCb, nil)
+  true
+
 proc close*(ctx: var TlsContext) =
   ## Free the underlying `SSL_CTX`.
   if ctx.handle != nil:
     SSL_CTX_free(ctx.handle)
     ctx.handle = nil
+
+proc freeContext*(ctx: var TlsContext) =
+  ## Unambiguous alias for `close(TlsContext)` — use at call sites that also
+  ## import `net` (whose `Socket` also has a `close`), where `ctx.close()` is
+  ## reported ambiguous.
+  close(ctx)
 
 # ---------------------------------------------------------------------------
 # Handshake
