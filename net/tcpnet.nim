@@ -110,6 +110,11 @@ proc listen*(port: int; backlog = 128): Socket =
 proc listen*(ip: Ipv4Address; port: int; backlog = 128): Socket =
   Socket(handle: listenTcp4(ipv4Value(ip), port, backlog))
 
+proc listen6*(port: int; backlog = 128; dualStack = true): Socket =
+  ## Listen on an IPv6 socket. With `dualStack` (default) the same socket also
+  ## accepts IPv4-mapped connections, so one listener serves both families.
+  Socket(handle: listenTcp6(port, backlog, dualStack))
+
 proc connect*(hostOrderAddr: uint32; port: int): Socket =
   Socket(handle: connectTcp4(hostOrderAddr, port))
 
@@ -148,10 +153,10 @@ proc resolveIpv4*(host: string; dest: var Ipv4Address): bool =
   true
 
 proc connectHost*(host: string; port: int): Socket =
-  var ip = anyIpv4()
-  if not resolveIpv4(host, ip):
-    return invalidSocket()
-  connect(ip, port)
+  ## Resolve `host` (IPv4 *or* IPv6) and connect to the first address that
+  ## accepts. Family-agnostic via `connectHostTcp`, so it follows AAAA records
+  ## as well as A records.
+  Socket(handle: connectHostTcp(host, port))
 
 proc connectHostNonBlocking*(host: string; port: int): SocketConnectResult =
   var ip = anyIpv4()
@@ -432,36 +437,21 @@ proc readAll*(reader: var BufferedSocket): string =
 
 proc dial*(host: string; port: int): SocketConnectResult =
   ## Resolve `host` and try each resolved address in turn until one connects
-  ## (happy-eyeballs-lite). Returns a connected socket, or a failed result whose
-  ## `errorCode` is the last connect error.
-  ##
-  ## TODO: `resolveIpv4` yields a single AF_INET address today. When the resolver
-  ## returns multiple addresses (including IPv6), enumerate them here and try
-  ## each — the loop below is already shaped for that.
-  var ip = anyIpv4()
-  if not resolveIpv4(host, ip):
+  ## (happy-eyeballs-lite). Now family-agnostic: `connectHostTcp` enumerates the
+  ## full getaddrinfo result set — every AAAA (IPv6) and A (IPv4) address — and
+  ## returns the first that accepts. Returns a connected socket, or a failed
+  ## result whose `errorCode` is the last connect error.
+  let h = connectHostTcp(host, port)
+  if isValidTcp(h):
     return SocketConnectResult(
-      socket: invalidSocket(),
-      status: socketConnectFailed,
-      errorCode: lastNetErrorCode()
+      socket: Socket(handle: h),
+      status: socketConnectConnected,
+      errorCode: 0
     )
-  var candidates = @[ip]
-  var lastError = 0
-  var i = 0
-  while i < candidates.len:
-    let s = connect(candidates[i], port)
-    if s.isValid:
-      return SocketConnectResult(
-        socket: s,
-        status: socketConnectConnected,
-        errorCode: 0
-      )
-    lastError = lastNetErrorCode()
-    inc i
   SocketConnectResult(
     socket: invalidSocket(),
     status: socketConnectFailed,
-    errorCode: lastError
+    errorCode: lastNetErrorCode()
   )
 
 proc connectTimeout*(hostOrderAddr: uint32; port: int; millis: int): SocketConnectResult =
