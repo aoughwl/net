@@ -1,5 +1,7 @@
 ## net/address.nim — small IPv4 address helpers.
 
+import tcp
+
 type
   Ipv4Address* = object
     value*: uint32
@@ -29,6 +31,15 @@ proc localhostIpv4*(): Ipv4Address =
 
 proc ipv4Value*(ip: Ipv4Address): uint32 =
   ip.value
+
+proc formatIpv4*(ip: Ipv4Address): string =
+  ## Format an `Ipv4Address` as dotted-decimal text "a.b.c.d". Delegates to the
+  ## `tcp` package's host-order `formatIpv4(uint32)`. Inverse of `parseIpv4`.
+  formatIpv4(ip.value)
+
+proc `$`*(ip: Ipv4Address): string =
+  ## Dotted-decimal string form, e.g. `$ipv4(127, 0, 0, 1) == "127.0.0.1"`.
+  formatIpv4(ip.value)
 
 proc parseIpv4*(s: string; dest: var Ipv4Address): bool =
   var part = 0

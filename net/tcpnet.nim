@@ -47,6 +47,35 @@ proc isValid*(endpoint: Endpoint): bool =
 proc endpointFromTcp(endpoint: TcpEndpoint): Endpoint =
   Endpoint(address: Ipv4Address(value: endpoint.address), port: endpoint.port)
 
+proc appendInt(s: var string; value: int) =
+  ## Append the decimal digits of a (possibly negative) integer.
+  if value == 0:
+    s.add('0')
+    return
+  var v = value
+  var negative = false
+  if v < 0:
+    negative = true
+    v = -v
+  var digits = default(array[24, char])
+  var n = 0
+  while v > 0:
+    digits[n] = char(ord('0') + int(v mod 10))
+    v = v div 10
+    inc n
+  if negative:
+    s.add('-')
+  var i = n - 1
+  while i >= 0:
+    s.add digits[i]
+    dec i
+
+proc `$`*(endpoint: Endpoint): string =
+  ## Format an endpoint as "a.b.c.d:port", e.g. "127.0.0.1:8080".
+  result = formatIpv4(endpoint.address)
+  result.add(':')
+  appendInt(result, endpoint.port)
+
 proc initNet*() =
   initTcp()
 
@@ -282,18 +311,166 @@ proc closeAndInvalidate*(socket: var Socket) =
   socket.handle = InvalidTcpHandle
 
 proc recv*(socket: Socket; maxBytes: int): string =
-  var buf = default(array[8192, char])
-  var limit = maxBytes
-  if limit > buf.len:
-    limit = buf.len
-  if limit < 0:
-    limit = 0
-  let n = recvInto(socket, addr buf[0], limit)
+  ## Read up to `maxBytes` bytes into a growable string, looping until `maxBytes`
+  ## are read or the peer signals EOF / a nonblocking read would block. Unlike a
+  ## single `recvInto`, this is not silently capped at 8192 bytes.
   result = ""
+  if not socket.isValid:
+    return result
+  var remaining = maxBytes
+  if remaining < 0:
+    remaining = 0
+  var buf = default(array[8192, char])
+  while remaining > 0:
+    var chunk = buf.len
+    if chunk > remaining:
+      chunk = remaining
+    let n = recvInto(socket, addr buf[0], chunk)
+    if n <= 0:
+      break
+    var i = 0
+    while i < n:
+      result.add buf[i]
+      inc i
+    remaining = remaining - n
+
+proc readAll*(socket: Socket): string =
+  ## Read the whole stream until the peer closes (EOF) or a read stops making
+  ## progress. Loops `recvInto` into a growable string.
+  result = ""
+  if not socket.isValid:
+    return result
+  var buf = default(array[8192, char])
+  while true:
+    let n = recvInto(socket, addr buf[0], buf.len)
+    if n <= 0:
+      break
+    var i = 0
+    while i < n:
+      result.add buf[i]
+      inc i
+
+type
+  BufferedSocket* = object
+    ## A small buffered reader over a `Socket`. Owns a pending-byte buffer so
+    ## line-oriented protocols can read a line at a time without over-reading
+    ## past the terminator on the underlying socket.
+    socket*: Socket
+    buffer: string
+    pos: int
+
+proc newBufferedSocket*(socket: Socket): BufferedSocket =
+  ## Wrap a socket in a buffered reader.
+  BufferedSocket(socket: socket, buffer: "", pos: 0)
+
+proc bufferedSocket*(socket: Socket): BufferedSocket =
+  ## Alias for `newBufferedSocket`.
+  newBufferedSocket(socket)
+
+proc fillBuffer(reader: var BufferedSocket): int =
+  ## Pull one chunk from the socket into the pending buffer. Returns the number
+  ## of bytes appended (0 at EOF / would-block / error).
+  var buf = default(array[8192, char])
+  let n = recvInto(reader.socket, addr buf[0], buf.len)
+  if n <= 0:
+    return 0
   var i = 0
   while i < n:
-    result.add buf[i]
+    reader.buffer.add buf[i]
     inc i
+  n
+
+proc recvLine*(reader: var BufferedSocket): string =
+  ## Read one CRLF- or LF-terminated line, stripping the terminator. Any bytes
+  ## read past the newline stay buffered for the next call. Returns "" at EOF
+  ## with no buffered data left.
+  result = ""
+  while true:
+    var i = reader.pos
+    while i < reader.buffer.len:
+      if reader.buffer[i] == '\n':
+        var j = reader.pos
+        while j < i:
+          if not (j == i - 1 and reader.buffer[j] == '\r'):
+            result.add reader.buffer[j]
+          inc j
+        reader.pos = i + 1
+        return result
+      inc i
+    # No newline in the buffered region; pull more bytes.
+    if fillBuffer(reader) == 0:
+      # EOF: return any remaining buffered bytes as a final unterminated line.
+      var j = reader.pos
+      while j < reader.buffer.len:
+        if not (j == reader.buffer.len - 1 and reader.buffer[j] == '\r'):
+          result.add reader.buffer[j]
+        inc j
+      reader.pos = reader.buffer.len
+      return result
+
+proc recv*(reader: var BufferedSocket; maxBytes: int): string =
+  ## Read up to `maxBytes` bytes, draining any buffered bytes first (so it
+  ## composes with `recvLine`), then reading from the socket.
+  result = ""
+  var remaining = maxBytes
+  if remaining < 0:
+    remaining = 0
+  while remaining > 0 and reader.pos < reader.buffer.len:
+    result.add reader.buffer[reader.pos]
+    inc reader.pos
+    remaining = remaining - 1
+  if remaining > 0:
+    result.add recv(reader.socket, remaining)
+
+proc readAll*(reader: var BufferedSocket): string =
+  ## Read everything left, draining the buffer first, then the socket to EOF.
+  result = ""
+  while reader.pos < reader.buffer.len:
+    result.add reader.buffer[reader.pos]
+    inc reader.pos
+  result.add readAll(reader.socket)
+
+proc dial*(host: string; port: int): SocketConnectResult =
+  ## Resolve `host` and try each resolved address in turn until one connects
+  ## (happy-eyeballs-lite). Returns a connected socket, or a failed result whose
+  ## `errorCode` is the last connect error.
+  ##
+  ## TODO: `resolveIpv4` yields a single AF_INET address today. When the resolver
+  ## returns multiple addresses (including IPv6), enumerate them here and try
+  ## each — the loop below is already shaped for that.
+  var ip = anyIpv4()
+  if not resolveIpv4(host, ip):
+    return SocketConnectResult(
+      socket: invalidSocket(),
+      status: socketConnectFailed,
+      errorCode: lastNetErrorCode()
+    )
+  var candidates = @[ip]
+  var lastError = 0
+  var i = 0
+  while i < candidates.len:
+    let s = connect(candidates[i], port)
+    if s.isValid:
+      return SocketConnectResult(
+        socket: s,
+        status: socketConnectConnected,
+        errorCode: 0
+      )
+    lastError = lastNetErrorCode()
+    inc i
+  SocketConnectResult(
+    socket: invalidSocket(),
+    status: socketConnectFailed,
+    errorCode: lastError
+  )
+
+proc connectTimeout*(hostOrderAddr: uint32; port: int; millis: int): SocketConnectResult =
+  ## Blocking connect bounded by `millis`, wrapping tcp's `connectTcp4Timeout`.
+  socketConnectResultFromTcp(connectTcp4Timeout(hostOrderAddr, port, millis))
+
+proc connectTimeout*(ip: Ipv4Address; port: int; millis: int): SocketConnectResult =
+  ## Blocking connect bounded by `millis`, wrapping tcp's `connectTcp4Timeout`.
+  socketConnectResultFromTcp(connectTcp4Timeout(ipv4Value(ip), port, millis))
 
 proc send*(socket: Socket; data: string): int =
   ## Send the whole string unless the socket reports an error.
