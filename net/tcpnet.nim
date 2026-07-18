@@ -7,8 +7,18 @@ type
   Socket* = object
     handle*: TcpHandle
 
+  AddressFamily* = enum
+    familyV4,
+    familyV6
+
   Endpoint* = object
-    address*: Ipv4Address
+    ## A transport endpoint. `family` selects which address field is valid:
+    ## `address` for IPv4 (the default) and `v6` for IPv6. The IPv4 fast path is
+    ## unchanged — `Endpoint(address: someIpv4, port: p)` still works and stays
+    ## `familyV4`.
+    family*: AddressFamily
+    address*: Ipv4Address        ## valid when family == familyV4
+    v6*: Ipv6Address             ## valid when family == familyV6
     port*: int
 
   SocketConnectStatus* = enum
@@ -45,7 +55,15 @@ proc isValid*(endpoint: Endpoint): bool =
   endpoint.port >= 0
 
 proc endpointFromTcp(endpoint: TcpEndpoint): Endpoint =
-  Endpoint(address: Ipv4Address(value: endpoint.address), port: endpoint.port)
+  if endpoint.family == tcpFamilyV6:
+    Endpoint(family: familyV6, v6: ipv6FromBytes(endpoint.v6), port: endpoint.port)
+  else:
+    Endpoint(family: familyV4, address: Ipv4Address(value: endpoint.address),
+             port: endpoint.port)
+
+proc isIpv6*(endpoint: Endpoint): bool =
+  ## True when this endpoint carries an IPv6 address.
+  endpoint.family == familyV6
 
 proc appendInt(s: var string; value: int) =
   ## Append the decimal digits of a (possibly negative) integer.
@@ -71,10 +89,17 @@ proc appendInt(s: var string; value: int) =
     dec i
 
 proc `$`*(endpoint: Endpoint): string =
-  ## Format an endpoint as "a.b.c.d:port", e.g. "127.0.0.1:8080".
-  result = formatIpv4(endpoint.address)
-  result.add(':')
-  appendInt(result, endpoint.port)
+  ## Format an endpoint. IPv4 renders as "a.b.c.d:port" (e.g. "127.0.0.1:8080");
+  ## IPv6 renders bracketed per RFC 3986, e.g. "[::1]:8080".
+  if endpoint.family == familyV6:
+    result = "["
+    result.add(formatIpv6(endpoint.v6))
+    result.add("]:")
+    appendInt(result, endpoint.port)
+  else:
+    result = formatIpv4(endpoint.address)
+    result.add(':')
+    appendInt(result, endpoint.port)
 
 proc initNet*() =
   initTcp()

@@ -41,6 +41,45 @@ proc `$`*(ip: Ipv4Address): string =
   ## Dotted-decimal string form, e.g. `$ipv4(127, 0, 0, 1) == "127.0.0.1"`.
   formatIpv4(ip.value)
 
+type
+  Ipv6Address* = object
+    ## A 128-bit IPv6 address held as 16 network-order bytes.
+    bytes*: array[16, byte]
+
+proc ipv6FromBytes*(b: array[16, byte]): Ipv6Address =
+  ## Wrap 16 raw network-order bytes as an `Ipv6Address`.
+  Ipv6Address(bytes: b)
+
+proc anyIpv6*(): Ipv6Address =
+  ## The unspecified address `::` (all zeros).
+  Ipv6Address(bytes: default(array[16, byte]))
+
+proc localhostIpv6*(): Ipv6Address =
+  ## The IPv6 loopback address `::1`.
+  var b = default(array[16, byte])
+  b[15] = 1'u8
+  Ipv6Address(bytes: b)
+
+proc ipv6Bytes*(ip: Ipv6Address): array[16, byte] =
+  ip.bytes
+
+proc formatIpv6*(ip: Ipv6Address): string =
+  ## RFC 5952 canonical text form, delegating to the `tcp` byte formatter.
+  formatIpv6(ip.bytes)
+
+proc `$`*(ip: Ipv6Address): string =
+  ## Canonical IPv6 text, e.g. `$localhostIpv6() == "::1"`.
+  formatIpv6(ip.bytes)
+
+proc parseIpv6*(s: string; dest: var Ipv6Address): bool =
+  ## Parse IPv6 text (full / `::`-compressed / v4-mapped tail) into `dest`.
+  ## Inverse of `$`. Returns false and leaves `dest` untouched on bad input.
+  let r = parseIpv6Text(s)
+  if not r.ok:
+    return false
+  dest = Ipv6Address(bytes: r.bytes)
+  true
+
 proc parseIpv4*(s: string; dest: var Ipv4Address): bool =
   var part = 0
   var octet = 0
