@@ -380,6 +380,10 @@ proc readAll*(socket: Socket): string =
       result.add buf[i]
       inc i
 
+const
+  DefaultChunkSize* = 8192    ## bytes pulled from the socket per `fillBuffer`
+  DefaultMaxLine* = 65536     ## longest line `recvLine` will assemble
+
 type
   BufferedSocket* = object
     ## A small buffered reader over a `Socket`. Owns a pending-byte buffer so
@@ -388,20 +392,62 @@ type
     socket*: Socket
     buffer: string
     pos: int
+    chunkSize*: int      ## read granularity; <= 0 means `DefaultChunkSize`
+    maxLine*: int        ## longest line `recvLine` assembles; 0 means unlimited
+    lineTooLong*: bool   ## set when `recvLine` hit `maxLine` before a newline
 
-proc newBufferedSocket*(socket: Socket): BufferedSocket =
-  ## Wrap a socket in a buffered reader.
-  BufferedSocket(socket: socket, buffer: "", pos: 0)
+proc newBufferedSocket*(socket: Socket; chunkSize = DefaultChunkSize;
+                        maxLine = DefaultMaxLine): BufferedSocket =
+  ## Wrap a socket in a buffered reader. `maxLine` bounds how far `recvLine`
+  ## will read without seeing a newline — a peer that never sends one can
+  ## otherwise grow the buffer without limit. Pass `maxLine = 0` for the old
+  ## unbounded behaviour.
+  BufferedSocket(socket: socket, buffer: "", pos: 0,
+                 chunkSize: if chunkSize > 0: chunkSize else: DefaultChunkSize,
+                 maxLine: if maxLine >= 0: maxLine else: 0,
+                 lineTooLong: false)
 
 proc bufferedSocket*(socket: Socket): BufferedSocket =
   ## Alias for `newBufferedSocket`.
   newBufferedSocket(socket)
 
+proc compact(reader: var BufferedSocket) =
+  ## Drop the already-consumed prefix. Without this the buffer only ever grows:
+  ## `recvLine` advances `pos` but every fill appends, so a long-lived socket
+  ## retains every byte it ever read.
+  if reader.pos == 0:
+    return
+  if reader.pos >= reader.buffer.len:
+    reader.buffer = ""
+    reader.pos = 0
+    return
+  var rest = ""
+  var i = reader.pos
+  while i < reader.buffer.len:
+    rest.add reader.buffer[i]
+    inc i
+  reader.buffer = rest
+  reader.pos = 0
+
+proc pending*(reader: BufferedSocket): int =
+  ## Bytes buffered but not yet consumed.
+  reader.buffer.len - reader.pos
+
+proc bufferBytes*(reader: BufferedSocket): int =
+  ## Bytes the reader is currently holding, consumed prefix included. Stays
+  ## bounded because the buffer compacts; it is the memory a long-lived reader
+  ## actually retains.
+  reader.buffer.len
+
 proc fillBuffer(reader: var BufferedSocket): int =
   ## Pull one chunk from the socket into the pending buffer. Returns the number
   ## of bytes appended (0 at EOF / would-block / error).
-  var buf = default(array[8192, char])
-  let n = recvInto(reader.socket, addr buf[0], buf.len)
+  compact(reader)
+  var size = reader.chunkSize
+  if size <= 0:
+    size = DefaultChunkSize
+  var buf = newSeq[char](size)
+  let n = recvInto(reader.socket, addr buf[0], size)
   if n <= 0:
     return 0
   var i = 0
@@ -414,7 +460,13 @@ proc recvLine*(reader: var BufferedSocket): string =
   ## Read one CRLF- or LF-terminated line, stripping the terminator. Any bytes
   ## read past the newline stay buffered for the next call. Returns "" at EOF
   ## with no buffered data left.
+  ##
+  ## Bounded by `reader.maxLine`: if that many bytes arrive with no newline the
+  ## partial line is returned and `reader.lineTooLong` is set, so a peer that
+  ## never terminates a line cannot grow the buffer without limit. Check the
+  ## flag before trusting the result.
   result = ""
+  reader.lineTooLong = false
   while true:
     var i = reader.pos
     while i < reader.buffer.len:
@@ -427,7 +479,16 @@ proc recvLine*(reader: var BufferedSocket): string =
         reader.pos = i + 1
         return result
       inc i
-    # No newline in the buffered region; pull more bytes.
+    # No newline yet. Stop before the pending region outgrows maxLine.
+    if reader.maxLine > 0 and reader.buffer.len - reader.pos >= reader.maxLine:
+      var j = reader.pos
+      while j < reader.pos + reader.maxLine:
+        result.add reader.buffer[j]
+        inc j
+      reader.pos = j
+      reader.lineTooLong = true
+      return result
+    # Pull more bytes.
     if fillBuffer(reader) == 0:
       # EOF: return any remaining buffered bytes as a final unterminated line.
       var j = reader.pos
@@ -449,6 +510,7 @@ proc recv*(reader: var BufferedSocket; maxBytes: int): string =
     result.add reader.buffer[reader.pos]
     inc reader.pos
     remaining = remaining - 1
+  compact(reader)
   if remaining > 0:
     result.add recv(reader.socket, remaining)
 
@@ -458,6 +520,7 @@ proc readAll*(reader: var BufferedSocket): string =
   while reader.pos < reader.buffer.len:
     result.add reader.buffer[reader.pos]
     inc reader.pos
+  compact(reader)
   result.add readAll(reader.socket)
 
 proc dial*(host: string; port: int): SocketConnectResult =
