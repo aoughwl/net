@@ -149,6 +149,40 @@ proc connect*(ip: Ipv4Address; port: int): Socket =
 proc connectLocalhost*(port: int): Socket =
   Socket(handle: connectLocalhostTcp(port))
 
+## Policy-carrying variants
+##
+## `net` re-exports `tcp`, so `TcpOpts` and its constructors are already in
+## scope for anyone who wrote `import net`. These are the entry points that
+## consume one. Each takes the report by `var` rather than dropping it: an
+## option the platform refused is the caller's to know about.
+
+proc listen*(port: int; opts: TcpOpts; report: var TcpOptsReport): Socket =
+  ## Listen under an explicit socket policy instead of the built-in one.
+  Socket(handle: listenTcpOpts(ipv4Value(anyIpv4()), port, opts, report))
+
+proc listen*(ip: Ipv4Address; port: int; opts: TcpOpts;
+             report: var TcpOptsReport): Socket =
+  Socket(handle: listenTcpOpts(ipv4Value(ip), port, opts, report))
+
+proc listen6*(port: int; opts: TcpOpts; report: var TcpOptsReport): Socket =
+  ## Dual-stack is `opts.v6Only == optOff`, which `defaultListenerOpts()` sets.
+  Socket(handle: listenTcp6Opts(port, opts, report))
+
+proc connect*(ip: Ipv4Address; port: int; opts: TcpOpts;
+              report: var TcpOptsReport): Socket =
+  ## Connect under an explicit policy. Buffer sizes and the local bind only
+  ## take effect before `connect`, which is why they cannot be a follow-up call.
+  Socket(handle: connectTcp4Opts(ipv4Value(ip), port, opts, report))
+
+proc connect*(hostOrderAddr: uint32; port: int; opts: TcpOpts;
+              report: var TcpOptsReport): Socket =
+  Socket(handle: connectTcp4Opts(hostOrderAddr, port, opts, report))
+
+proc applyOpts*(s: Socket; opts: TcpOpts): TcpOptsReport =
+  ## Apply a policy to an already-open socket — an accepted connection, most
+  ## often, where the listener's policy does not carry over.
+  applyTcpOpts(s.handle, opts)
+
 proc socketConnectResultFromTcp(tcpResult: TcpConnectResult): SocketConnectResult =
   var status = socketConnectFailed
   if tcpResult.status == tcpConnectInProgress:
