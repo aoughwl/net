@@ -1,3 +1,5 @@
+> **Moved.** This library now lives in [aoughwl/std](https://github.com/aoughwl/std/tree/main/net) (directory `net/`), with its full history. This repository is kept as a redirect; new work happens in `aoughwl/std`.
+
 # net
 
 A stdlib-style network API for [Nimony](https://github.com/nim-lang/nimony), built
